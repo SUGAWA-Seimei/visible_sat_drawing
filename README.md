@@ -62,8 +62,8 @@ https://output.jsbin.com/zepowum
 ####  orb.js
 https://github.com/lizard-isana/orb.js
 
- Orb Calc Skeltonの方でも使用しているOrv.v2.jsを使わせていただきました。
-この用途だったらorb-satellite.v2.jsでもいいけど、ここもパクりました。
+ Orb Calc Skeltonの方でも使用しているorb.v2.jsを使わせていただきました。
+この用途だったらorb-satellite.v2.jsでもいいけど、ここもOrb Calc Skeltonをパクりました。
  
 ####  new.css
 https://newcss.net/
