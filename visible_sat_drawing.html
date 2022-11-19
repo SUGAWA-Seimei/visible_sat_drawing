@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html>
+<head>
+ <meta charset="utf-8">
+ <meta name="viewport" content="width=device-width">
+
+ <script src="orb.v2.js"></script>
+
+
+ <title>自分の位置からのAZ,ELを描画</title>
+
+<link rel="stylesheet" href="new.css">
+
+
+</head>
+
+<body onScroll="anko.style.height=window.scrollY+'px';">
+<table width=100%>
+<tr><td  style="vertical-align: top;">
+<p>観測衛星を設定<br>
+<textarea type="text" id="inputFormTLE" name="inputFormTLE" placeholder="TLE" cols=71 rows=3></textarea>
+</p>
+
+<p>観測地点を設定<br>
+緯度<input type="text" id="inputFormLat" name="inputFormLat" placeholder="緯度:90.0000" value="35.6503602"><br>
+
+経度<input type="text" id="inputFormLon" name="inputFormLon" placeholder="経度:180.0000" value="139.7391864"><br>
+
+高度<input type="text" id="inputFormHgt" name="inputFormHgt" placeholder="高度:m" value="13.0"><br>
+
+</p>
+
+<p>期間を設定(日本時間)<br>
+
+<input type="text" id="inputFormStart" name="inputFormStart" placeholder="時間:yyyymmddhhmmss">
+<button type="button" onclick="set_time();">いま</button>
+</p>
+
+<p>
+<button type="button" onclick="calcBtn()">計算開始</button> <input type="checkbox" id="realtime" name =realtime>リアルタイム
+</p>
+
+<p>
+始点　AZ<input type="text" id="startAz" name="startAz" placeholder="方位:135.000" size=7>
+EL<input type="text" id="startEl" name="startEl" placeholder="仰角:60.000" size=7>
+<button type="button" onclick="clear_filter();">フィルタ解除</button><br>
+終点　AZ<input type="text" id="stopAz" name="stopAz" placeholder="方位:225.000" size=7>
+EL<input type="text" id="stopEl" name="stopEl" placeholder="仰角:80.000" size=7>
+<button type="button" onclick="filter_az_el();">AZ(方位),EL(仰角)の範囲を絞る</button><br>
+</p>
+
+<table id="result_display">
+<tr><td>id</td><td>衛星名</td><td>AZ</td><td>EL</td><td>NORAD</td></tr>
+<tr><td>1</td><td>RODS OF TAKAHIRO</td><td>104</td><td>63</td><td>42582059</td></tr>
+<tr><td>2</td><td>KARASAWA-MK2</td><td>334</td><td>19</td><td>81364358073</td></tr>
+</table>
+</td><td  style="vertical-align: top;">
+<div id="anko"></div>
+<canvas id="board" width="800" height="800" style="outline:solid;"></canvas>
+</td></tr></table>
+
+
+<script>
+var satList = [];
+var orbData = [[]];
+var context;
+var radius = 400;
+var yohaku = 10;
+var canvas_drag = false;
+
+var sentaku_tle = -1;
+var azel_filterling= false;
+
+context = board.getContext('2d');
+board.width = (radius + yohaku)*2;
+board.height = (radius + yohaku)*2 + 30;
+draw_result();
+set_time();
+
+board.onmousedown = function(event) { 
+
+	xx = event.clientX - board.getBoundingClientRect().left;
+	yy = event.clientY - board.getBoundingClientRect().top;
+
+	tmp = Math.atan2(xx - radius - yohaku ,radius + yohaku - yy);
+	if(tmp<0){tmp = tmp+2 * Math.PI;}
+	startAz.value = Math.floor( tmp / Math.PI*180*1000)/1000;
+
+	tmp = Math.sqrt((xx - radius - yohaku)*(xx - radius - yohaku)+(yy - radius - yohaku)*(yy - radius - yohaku));
+	if(tmp>radius){tmp = radius;}
+	startEl.value = Math.floor((radius-tmp)/radius*90*1000)/1000;
+
+	function onMouseMove(event) {
+		xx = event.clientX - board.getBoundingClientRect().left;
+		yy = event.clientY - board.getBoundingClientRect().top;
+
+		tmp = Math.atan2(xx - radius - yohaku ,radius + yohaku - yy);
+		if(tmp<0){tmp = tmp+2 * Math.PI;}
+		stopAz.value = Math.floor( tmp / Math.PI*180*1000)/1000;
+
+		tmp = Math.sqrt((xx - radius - yohaku)*(xx - radius - yohaku)+(yy - radius - yohaku)*(yy - radius - yohaku));
+		if(tmp>radius){tmp = radius;}
+		stopEl.value = Math.floor((radius-tmp)/radius*90*1000)/1000;
+		
+		draw_result(true);
+	}
+
+	document.addEventListener('mousemove', onMouseMove);
+
+	board.onmouseup = function() {
+		document.removeEventListener('mousemove', onMouseMove);
+	};
+
+	board.onmouseleave = function() {
+		document.removeEventListener('mousemove', onMouseMove);
+	};
+};
+
+function set_time(){
+	var date = new Date();
+	document.getElementById('inputFormStart').value = date.getFullYear()+('0'+(date.getMonth() + 1)).slice(-2)+('0'+date.getDate()).slice(-2)+('0'+date.getHours()).slice(-2)+('0'+date.getMinutes()).slice(-2)+('0'+date.getSeconds()).slice(-2);
+}
+
+function filter_az_el(){
+
+	if(satList.length==0) return false;
+
+	azel_filterling =true;
+
+	var startaz = Number(startAz.value);
+	var startel = Number(startEl.value);
+	var stopaz = Number(stopAz.value);
+	var stopel = Number(stopEl.value);
+
+	sentaku_tle = -1;
+
+	startAz.value=startaz;
+	startEl.value=startel;
+	stopAz.value=stopaz;
+	stopEl.value=stopel;
+
+	if(startaz>stopaz){tmp = startaz;startaz = stopaz;stopaz = tmp;}
+	if(startel>stopel){tmp = startel;startel = stopel;stopel = tmp;}
+
+	if(startaz + 180 < stopaz){tmp = true;}
+	else {tmp=false;}
+
+
+	for(var i=0;i<satList.length;i++){
+		if(satList[i].result && (startaz <= satList[i].az && satList[i].az <= stopaz)^tmp && startel <= satList[i].el && satList[i].el <= stopel){
+			satList[i].showInList = true;
+		}else{
+			satList[i].showInList = false;
+		}
+	}
+
+	draw_result();
+	show_result();
+}
+function clear_filter(){
+
+	if(satList.length==0) return false;
+
+	azel_filterling =false;
+
+	for(var i=0;i<satList.length;i++){
+		if(satList[i].result){
+			satList[i].showInList = true;
+		}
+	}
+
+	draw_result();
+	show_result();
+}
+
+
+function calcBtn() {
+	satList = [];
+	orbData = [];
+	sentaku_tle = -1;
+
+	let inputFormTLE = document.getElementById("inputFormTLE").value;
+	let inputFormLat = document.getElementById("inputFormLat");
+	let inputFormLon = document.getElementById("inputFormLon");
+	let inputFormHgt = document.getElementById("inputFormHgt");
+	let inputFormStart = document.getElementById("inputFormStart");
+
+	let inLat = Number(inputFormLat.value);
+	let inLon = Number(inputFormLon.value);
+	let inHgt = Number(inputFormHgt.value);
+	let inSrt = inputFormStart.value;
+
+	//方位、高度の計算
+	var your_location = {
+		"latitude": 35.6503602,
+		"longitude": 139.7391864,
+		"altitude": 0
+	}
+
+	your_location.latitude = inLat;
+	your_location.longitude = inLon;
+	your_location.altitude = inHgt;
+	//console.log(your_location.latitude);
+	//console.log(your_location.longitude);
+	//console.log(your_location.altitude);
+
+	//console.log("TLE: \n" +inputFormTLE);
+	//console.log("Lat: " + inLat);
+	//console.log("Lon: " + inLon);
+	//console.log("Height: " + inHgt);
+	//console.log("Start: " + inSrt);
+
+	var date = new Date();
+
+	//日付変換：JSTからUTCへ
+	//yyyymmddhhmmssを全て秒へその後９時間（32,400秒）を引いて戻す
+
+
+	var jyear = Number(inSrt.substr(0, 4));
+	var jmonth = Number(inSrt.substr(4, 2));
+	jmonth--;
+	var jday = Number(inSrt.substr(6, 2));
+	var jhour = Number(inSrt.substr(8, 2));
+	var jmin = Number(inSrt.substr(10, 2));
+	var jsec = Number(inSrt.substr(12));
+	var jstCnt = new Date(jyear, jmonth, jday, jhour, jmin, jsec);
+	jstSrt = new Date(jstCnt.getTime() - 150 * 1000);
+	//console.log(jstSrt);
+
+
+	var jstStp = new Date(jstSrt.getTime() + 300 * 1000);
+	//console.log(jstStp);
+
+
+	var diff = jstStp.getTime() - jstSrt.getTime();
+	var diffSecond = diff / 1000;
+	//console.log(diffSecond);
+	let defaultSatName;
+
+	let tle1st;
+	let tle2nd;
+
+	var tle_length = 165;
+	let tle_count = Math.floor(inputFormTLE.length / tle_length);
+
+	var orbcalcresultValue = "";
+	for (var i = 0; i < tle_count; i++) {
+
+		var ii = i * (tle_length);
+
+		satList[i] = {
+			id: i,
+			satName: "",
+			az: 0,
+			el: 90,
+			norad: 11111,
+			result: false,
+			showInList: false,
+			start: -1,
+			stop: diffSecond
+		};
+
+		satList[i].satName = inputFormTLE.substring(ii, ii + 24).replace(/ /g, "");
+
+		tle1st = inputFormTLE.substring(ii + 25, ii + 95);
+		tle2nd = inputFormTLE.substring(ii + 95, ii + 164);
+
+		if(tle1st.substr( 0, 2 )!="1 " || tle2nd.substr( 0, 2 )!="2 "){
+			alert("" + i + "番目のTLE("+(i*3)+"行目？)がおかしいので中断します。");
+			return false;
+		}
+
+
+		satList[i].norad = Number(tle1st.substring(2, 7));
+
+
+		//console.log("1st_line: " + tle1st);
+		//console.log("2nd_line: " + tle2nd);
+
+		//ここからorb2jsを使用した衛星位置計算///////////////////////////////////////
+
+		//二行軌道要素から人工衛星の位置
+		var tle = {
+			first_line: "1 25544U 98067A   15012.59173611  .00014829  00000-0  23845-3 0  7179",
+			second_line: "2 25544 051.6466 140.7335 0006107 243.2909 291.5211 15.53213268923827"
+		} 
+		tle.first_line = tle1st;
+		tle.second_line = tle2nd;
+
+		var satellite = new Orb.SGP4(tle);
+		var xyz = satellite.xyz(jstSrt); // equatorial rectangular coordinates (x, y, z ,xdot, ydot, zdot)
+		var latlng = satellite.latlng(jstSrt); // geographic spherical coordinates(latitude, longitude, altitude, velocity)
+
+
+		var observe_satellite = new Orb.Observation({
+			"observer": your_location,
+			"target": satellite
+		});
+		var horizontal = observe_satellite.azel(jstSrt); // horizontal coordinates(azimuth, elevation)
+		var azimuth = horizontal.azimuth;
+		var elevation = horizontal.elevation;
+		var distance = horizontal.distance;
+		//console.log(azimuth);
+		//console.log(elevation);
+		//console.log(distance);
+
+
+		//5分間の衛星位置をリストアップ
+		orbData[i] = [];
+		ii = 0;
+		t_cnt = diffSecond / 2;
+		ref_el = -1;
+		for (var ts = 0; ts <= diffSecond; ts += 5) {
+			var dateLoop = new Date(jstSrt);
+			dateLoop.setSeconds(dateLoop.getSeconds() + ts);
+			//var xyzLoop = satellite.xyz(dateLoop); 
+			//var latlngLoop = satellite.latlng(dateLoop);
+
+			var horizontalLoop = observe_satellite.azel(dateLoop);
+			var azimuthLoop = horizontalLoop.azimuth;
+			var elevationLoop = horizontalLoop.elevation;
+			//var distanceLoop = horizontalLoop.distance;
+
+			if (ts <= t_cnt && ref_el < 0 && 0 <= elevationLoop) {
+				satList[i].start = ii;
+			}
+			if (ts == t_cnt) {
+				satList[i].az = Math.floor(azimuthLoop * 1000) / 1000;
+				satList[i].el = Math.floor(elevationLoop * 1000) / 1000;
+				if (elevationLoop > 0){
+					satList[i].result = true;
+					satList[i].showInList = true;
+				}
+			}
+			if (ts >= t_cnt && elevationLoop >= 0 && satList[i].stop + 2 > ii) {
+				satList[i].stop = ii;
+			}
+			orbData[i][ii] = {
+				az: azimuthLoop,
+				el: elevationLoop
+			}
+		
+			ii++;
+			ref_el = elevationLoop;
+		};
+		if (satList[i].start == satList[i].stop){satList[i].result = false;satList[i].showInList = false;}
+	
+	}
+	
+	if(azel_filterling){
+		filter_az_el();
+	}else{
+		draw_result();
+	}
+	show_result();
+
+if(realtime.checked){setTimeout(function(){set_time();calcBtn();},1000);}
+}
+
+
+function draw_selection(){
+
+	var startaz = Number(startAz.value);
+	var startel = Number(startEl.value);
+	var stopaz = Number(stopAz.value);
+	var stopel = Number(stopEl.value);
+	var tmp;
+
+	if(startaz == startAz.value && startel == startEl.value && stopaz == stopAz.value && stopel == stopEl.value){
+		
+		if(startaz + 180 < stopaz){tmp = true;}
+		else if(startaz < stopaz){tmp=false;}
+		else if(startaz - 180 < stopaz){tmp=true;}
+		else {tmp = false;}
+		
+		context.fillStyle = "rgb(200,255,200)";
+		context.beginPath();
+		context.arc(yohaku + radius, yohaku + radius, radius * (90-startel)/90,(startaz-90)/180 * Math.PI, (stopaz-90)/180 * Math.PI,tmp);
+		
+		//context.lineTo( stopaz/180 * Math.PI);
+		context.arc(yohaku + radius, yohaku + radius, radius * (90-stopel)/90,(stopaz-90)/180 * Math.PI,(startaz-90)/180 * Math.PI,!tmp);
+		context.closePath();
+		context.fill();		
+	};	
+
+}
+
+function draw_result(sele = false) {
+	//背景をきれいに
+	context.fillStyle = "hsl(50,100%,100%)";
+	context.fillRect(0, 0, board.width, board.height);
+
+	//選択範囲
+	if(azel_filterling || sele){draw_selection();}
+
+	//等仰角線の丸
+	context.strokeStyle = "rgb(160,160,160)";
+	context.beginPath();
+	context.arc(yohaku + radius, yohaku + radius, radius, 0, 2 * Math.PI);
+	context.stroke();
+	context.beginPath();
+	context.arc(yohaku + radius, yohaku + radius, radius * 3 / 4, 0, 2 * Math.PI);
+	context.stroke();
+	context.beginPath();
+	context.arc(yohaku + radius, yohaku + radius, radius * 2 / 4, 0, 2 * Math.PI);
+	context.stroke();
+	context.beginPath();
+	context.arc(yohaku + radius, yohaku + radius, radius * 1 / 4, 0, 2 * Math.PI);
+	context.stroke();
+
+	//十字
+	context.beginPath();
+	context.moveTo(yohaku + 0, yohaku + radius);
+	context.lineTo(yohaku + radius * 2, yohaku + radius);
+	context.stroke();
+	context.beginPath();
+	context.moveTo(yohaku + radius, yohaku + 0);
+	context.lineTo(yohaku + radius, yohaku + radius * 2);
+	context.stroke();
+
+	//方位や仰角のラベル
+	context.fillStyle = "rgb(160,160,160)";
+	context.textBaseline = "top";
+	context.font = "16px monospace";
+	context.fillText(0, yohaku + radius, yohaku + 0);
+	context.fillText(45, yohaku + radius, yohaku + radius / 2);
+	context.fillText(90, yohaku + radius, yohaku + radius);
+	context.fillText(90, yohaku + radius * 2 - 20, yohaku + radius);
+	context.fillText(180, yohaku + radius, yohaku + radius * 2 - 20);
+	context.fillText(270, yohaku +0, yohaku + radius);
+
+	
+
+	var t_cnt= Math.floor(orbData[0].length/2);
+	for (var i = 0; i < satList.length; i++) {
+		if (satList[i].result) {
+			dr = orbData[satList[i].id];
+			context.strokeStyle = "rgb(0,0,255)";
+			context.lineWidth = 1;
+			context.beginPath();
+			context.moveTo(yohaku + radius * (1 + Math.sin(dr[satList[i].start].az / 180 * Math.PI) * (90 - dr[satList[i].start].el) / 90),yohaku +  radius * (1 - Math.cos(dr[satList[i].start].az / 180 * Math.PI) * (90 - dr[satList[i].start].el) / 90));
+
+			for (var ii = satList[i].start + 1; ii <= satList[i].stop; ii++) {
+				context.lineTo(yohaku +radius * (1 + Math.sin(dr[ii].az / 180 * Math.PI) * (90 - dr[ii].el) / 90), yohaku + radius * (1 - Math.cos(dr[ii].az / 180 * Math.PI) * (90 - dr[ii].el) / 90));
+			}
+
+			context.stroke();
+			context.beginPath();
+			context.arc(yohaku + radius * (1 + Math.sin(dr[t_cnt].az / 180 * Math.PI) * (90 - dr[t_cnt].el) / 90), yohaku + radius * (1 - Math.cos(dr[t_cnt].az / 180 * Math.PI) * (90 - dr[t_cnt].el) / 90), 2, 0, 2 * Math.PI);
+			context.stroke();
+		}
+	}
+
+	if (0 <= sentaku_tle && orbData.length) {
+		i = sentaku_tle;
+		if (satList[i].result) {
+			dr = orbData[satList[i].id];
+			context.strokeStyle = "rgb(255,0,0)";
+			context.lineWidth = 1;
+			context.beginPath();
+			context.moveTo(yohaku + radius * (1 + Math.sin(dr[satList[i].start].az / 180 * Math.PI) * (90 - dr[satList[i].start].el) / 90),yohaku +  radius * (1 - Math.cos(dr[satList[i].start].az / 180 * Math.PI) * (90 - dr[satList[i].start].el) / 90));
+
+			for (var ii = satList[i].start + 1; ii <= satList[i].stop; ii++) {
+				context.lineTo(yohaku + radius * (1 + Math.sin(dr[ii].az / 180 * Math.PI) * (90 - dr[ii].el) / 90), yohaku + radius * (1 - Math.cos(dr[ii].az / 180 * Math.PI) * (90 - dr[ii].el) / 90));
+			}
+
+			context.stroke();
+			context.beginPath();
+			context.arc(yohaku + radius * (1 + Math.sin(dr[t_cnt].az / 180 * Math.PI) * (90 - dr[t_cnt].el) / 90), yohaku + radius * (1 - Math.cos(dr[t_cnt].az / 180 * Math.PI) * (90 - dr[t_cnt].el) / 90), 2, 0, 2 * Math.PI);
+			context.stroke();
+		}
+	}
+}
+
+function show_result(){
+	result_display.innerHTML =""
+	var roo = result_display.insertRow();
+	c = roo.insertCell();
+	c.innerHTML = "id　<a onClick='sat_sort(1,0);' href='#'>↑</a> <a onClick='sat_sort(1,1);' href='#'>↓</a>";
+	c = roo.insertCell();
+	c.innerHTML = "衛星名　<a onClick='sat_sort(2,0);' href='#1'>↑</a> <a onClick='sat_sort(2,1);' href='#'>↓</a>";
+	c = roo.insertCell();
+	c.innerHTML = "AZ　<a onClick='sat_sort(3,0);' href='#'>↑</a> <a onClick='sat_sort(3,1);' href='#'>↓</a>";
+	c = roo.insertCell();
+	c.innerHTML = "EL　<a onClick='sat_sort(4,0);' href='#'>↑</a> <a onClick='sat_sort(4,1);' href='#'>↓</a>";
+	c = roo.insertCell();
+	c.innerHTML = "NORAD ID　<a onClick='sat_sort(5,0);' href='#'>↑</a> <a onClick='sat_sort(5,1);' href='#'>↓</a>";
+
+	for(var i = 0;i<satList.length;i++){
+		if(satList[i].showInList){
+			roo = result_display.insertRow();
+			c = roo.insertCell();
+			c.innerHTML = satList[i].id;
+			if(sentaku_tle==i){c.style.outline = "solid";}
+			c = roo.insertCell();
+			c.innerHTML = satList[i].satName;
+			c = roo.insertCell();
+			c.innerHTML = satList[i].az;
+			c = roo.insertCell();
+			c.innerHTML = satList[i].el;
+			c = roo.insertCell();
+			c.innerHTML = satList[i].norad
+			roo.onclick = addon_cast(i);
+		}
+	}
+}
+
+function addon_cast(a){
+	return function(){
+		if(sentaku_tle==a){
+			sentaku_tle=-1;
+		}else{
+			sentaku_tle=a;
+		};
+		show_result();
+		draw_result();
+	}
+}
+
+function sat_sort(type,ud){
+
+
+	if(type==1){
+		satList.sort((a,b)=>{return a.id-b.id;});
+	}
+	if(type==2){
+		satList.sort((a,b)=>{if(a.satName < b.satName){return -1;}else if(a.name > b.name){return 1}else{return 0;}});
+	}
+	if(type==3){
+		satList.sort((a,b)=>{return a.az-b.az;});
+	}
+	if(type==4){
+		satList.sort((a,b)=>{return a.el-b.el;});
+	}
+	if(type==5){
+		satList.sort((a,b)=>{return a.norad-b.norad;});
+	}
+	
+	if(ud==1){satList.reverse();}
+	show_result();
+}
+
+</script>
+
+
+
+</body>
+</html>
+
