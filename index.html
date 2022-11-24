@@ -59,7 +59,7 @@ WNISAT 1R
 
 <p>日時を設定(日本時間)<br>
 
-<input type="datetime-local" id="inputFormStart" name="inputFormStart" placeholder="時間:yyyymmddhhmmss"  step="1">
+<input type="datetime-local" id="inputFormCenter" name="inputFormCenter" placeholder="時間:yyyy-mm-ddThh:mm:ss"  step="1">
 <button type="button" onclick="set_time();">いま</button>
 </p>
 
@@ -147,9 +147,9 @@ function set_time(){
 	var date = new Date();
 	date.setHours(date.getHours() + 9);
 	//console.log(date.toISOString().slice(0,19));
-	document.getElementById('inputFormStart').value =date.toISOString().slice(0,19);
-	//console.log(document.getElementById('inputFormStart').value);
-	//document.getElementById('inputFormStart').value = date.getFullYear()+('0'+(date.getMonth() + 1)).slice(-2)+('0'+date.getDate()).slice(-2)+('0'+date.getHours()).slice(-2)+('0'+date.getMinutes()).slice(-2)+('0'+date.getSeconds()).slice(-2);
+	document.getElementById('inputFormCenter').value =date.toISOString().slice(0,19);
+	//console.log(document.getElementById('inputFormCenter').value);
+	//document.getElementById('inputFormCenter').value = date.getFullYear()+('0'+(date.getMonth() + 1)).slice(-2)+('0'+date.getDate()).slice(-2)+('0'+date.getHours()).slice(-2)+('0'+date.getMinutes()).slice(-2)+('0'+date.getSeconds()).slice(-2);
 }
 
 function filter_az_el(){
@@ -205,7 +205,8 @@ function clear_filter(){
 }
 
 
-function calcBtn() {
+function calcBtn(){
+
 	satList = [];
 	orbData = [];
 	sentaku_tle = -1;
@@ -214,12 +215,12 @@ function calcBtn() {
 	let inputFormLat = document.getElementById("inputFormLat");
 	let inputFormLon = document.getElementById("inputFormLon");
 	let inputFormHgt = document.getElementById("inputFormHgt");
-	let inputFormStart = document.getElementById("inputFormStart");
+	let inputFormCenter = document.getElementById("inputFormCenter");
 
 	let inLat = Number(inputFormLat.value);
 	let inLon = Number(inputFormLon.value);
 	let inHgt = Number(inputFormHgt.value);
-	let inSrt = inputFormStart.value;
+	let inSrt = inputFormCenter.value;
 
 	//方位、高度の計算
 	var your_location = {
