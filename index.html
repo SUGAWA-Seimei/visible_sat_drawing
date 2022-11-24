@@ -22,9 +22,21 @@
 <textarea type="text" id="inputFormTLE" name="inputFormTLE" placeholder="TLE" cols=71 rows=3>ISS (ZARYA)             
 1 25544U 98067A   22323.21216435  .00009553  00000+0  17464-3 0  9992
 2 25544  51.6441 288.6194 0006892  90.0874  90.6776 15.50074559369222
+QZS-1 (MICHIBIKI-1)     
+1 37158U 10045A   22325.79895323 -.00000035  00000+0  00000+0 0  9991
+2 37158  42.5012 131.2182 0751114 270.3296  84.7797  1.00269066 44646
+QZS-2 (MICHIBIKI-2)     
+1 42738U 17028A   22327.67927899 -.00000181  00000+0  00000+0 0  9994
+2 42738  41.5111 261.9150 0762258 269.1648 275.1631  1.00292476 20096
+QZS-3 (MICHIBIKI-3)     
+1 42917U 17048A   22328.13035583 -.00000326  00000+0  00000+0 0  9998
+2 42917   0.0599 154.1879 0001352  96.1642 346.6991  1.00274480 19321
+QZS-4 (MICHIBIKI-4)     
+1 42965U 17062A   22327.55605508 -.00000300  00000+0  00000+0 0  9994
+2 42965  40.7285   0.0789 0750627 270.9519 129.5702  1.00262255 18769
 QZS-1R                  
-1 49336U 21096A   22322.71460463 -.00000178  00000+0  00000+0 0  9990
-2 49336  34.7722  99.4117 0749539 270.5904  80.5512  1.00271536  3916
+1 49336U 21096A   22327.66014052 -.00000189  00000+0  00000+0 0  9990
+2 49336  34.7830  99.3342 0750353 270.6674  65.7678  1.00269286  3968
 BSAT-4B                 
 1 46112U 20056A   22322.53357223 -.00000333  00000+0  00000+0 0  9996
 2 46112   0.0642 111.1824 0002335  70.7946 177.5438  1.00270697  8287
@@ -47,7 +59,7 @@ WNISAT 1R
 
 <p>日時を設定(日本時間)<br>
 
-<input type="text" id="inputFormStart" name="inputFormStart" placeholder="時間:yyyymmddhhmmss">
+<input type="datetime-local" id="inputFormStart" name="inputFormStart" placeholder="時間:yyyymmddhhmmss"  step="1">
 <button type="button" onclick="set_time();">いま</button>
 </p>
 
@@ -133,7 +145,11 @@ board.onmousedown = function(event) {
 
 function set_time(){
 	var date = new Date();
-	document.getElementById('inputFormStart').value = date.getFullYear()+('0'+(date.getMonth() + 1)).slice(-2)+('0'+date.getDate()).slice(-2)+('0'+date.getHours()).slice(-2)+('0'+date.getMinutes()).slice(-2)+('0'+date.getSeconds()).slice(-2);
+	date.setHours(date.getHours() + 9);
+	//console.log(date.toISOString().slice(0,19));
+	document.getElementById('inputFormStart').value =date.toISOString().slice(0,19);
+	//console.log(document.getElementById('inputFormStart').value);
+	//document.getElementById('inputFormStart').value = date.getFullYear()+('0'+(date.getMonth() + 1)).slice(-2)+('0'+date.getDate()).slice(-2)+('0'+date.getHours()).slice(-2)+('0'+date.getMinutes()).slice(-2)+('0'+date.getSeconds()).slice(-2);
 }
 
 function filter_az_el(){
@@ -232,12 +248,12 @@ function calcBtn() {
 
 
 	var jyear = Number(inSrt.substr(0, 4));
-	var jmonth = Number(inSrt.substr(4, 2));
+	var jmonth = Number(inSrt.substr(5, 2));
 	jmonth--;
-	var jday = Number(inSrt.substr(6, 2));
-	var jhour = Number(inSrt.substr(8, 2));
-	var jmin = Number(inSrt.substr(10, 2));
-	var jsec = Number(inSrt.substr(12));
+	var jday = Number(inSrt.substr(8, 2));
+	var jhour = Number(inSrt.substr(11, 2));
+	var jmin = Number(inSrt.substr(14, 2));
+	var jsec = Number(inSrt.substr(17));
 	var jstCnt = new Date(jyear, jmonth, jday, jhour, jmin, jsec);
 	jstSrt = new Date(jstCnt.getTime() - 150 * 1000);
 	//console.log(jstSrt);
